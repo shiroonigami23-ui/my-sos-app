@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SOS Device Control</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .log-entry {
+            font-family: 'Courier New', Courier, monospace;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white flex items-center justify-center min-h-screen">
+
+    <div class="w-full max-w-2xl mx-auto p-6 md:p-8 bg-gray-800 rounded-2xl shadow-2xl border border-gray-700">
+        <div class="text-center mb-6">
+            <h1 class="text-3xl font-bold text-red-400">SOS Device Control Panel</h1>
+            <p class="text-gray-400 mt-2">Connect to your ESP32 device to send and monitor signals.</p>
+        </div>
+
+        <!-- Connection Area -->
+        <div class="flex flex-col sm:flex-row items-center justify-center gap-4 mb-6">
+            <button id="connectButton" class="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition-all duration-300 transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-blue-500">
+                Connect to Device
+            </button>
+            <div id="status" class="mt-2 sm:mt-0 text-center sm:text-left text-sm font-medium py-2 px-4 rounded-md bg-gray-700 text-gray-300">
+                Status: Disconnected
+            </div>
+        </div>
+
+        <!-- SOS Trigger -->
+        <div class="mb-6">
+            <button id="sosButton" disabled class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-4 px-6 rounded-lg text-xl transition-all duration-300 disabled:bg-gray-600 disabled:cursor-not-allowed disabled:opacity-50 transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-red-500">
+                TRIGGER SOS SIGNAL
+            </button>
+        </div>
+
+        <!-- Log Area -->
+        <div>
+            <h2 class="text-xl font-semibold mb-2 text-gray-300">Device Log</h2>
+            <div id="log" class="h-64 bg-black bg-opacity-50 rounded-lg p-4 overflow-y-auto border border-gray-700">
+                <p class="text-gray-500 log-entry">Waiting for device connection...</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const connectButton = document.getElementById('connectButton');
+        const sosButton = document.getElementById('sosButton');
+        const statusDiv = document.getElementById('status');
+        const logDiv = document.getElementById('log');
+
+        let port;
+        let reader;
+        let writer;
+        const encoder = new TextEncoder();
+        const decoder = new TextDecoder();
+
+        connectButton.addEventListener('click', async () => {
+            if (port) {
+                await disconnect();
+            } else {
+                await connect();
+            }
+        });
+
+        sosButton.addEventListener('click', async () => {
+            if (!port || !writer) {
+                addToLog("ERROR: Not connected to a device.", "error");
+                return;
+            }
+            try {
+                await writer.write(encoder.encode("SOS\n"));
+                addToLog("Sent SOS command to device.", "sent");
+            } catch (error) {
+                addToLog(`Error sending command: ${error.message}`, "error");
+            }
+        });
+
+
+        async function connect() {
+            try {
+                if ('serial' in navigator) {
+                    port = await navigator.serial.requestPort();
+                    await port.open({ baudRate: 115200 });
+
+                    writer = port.writable.getWriter();
+                    reader = port.readable.getReader();
+
+                    connectButton.textContent = 'Disconnect';
+                    statusDiv.textContent = 'Status: Connected';
+                    statusDiv.classList.remove('bg-gray-700');
+                    statusDiv.classList.add('bg-green-700');
+                    sosButton.disabled = false;
+                    logDiv.innerHTML = ''; // Clear log
+                    addToLog('Connected to device. Listening for messages...', 'system');
+
+                    // Listen for data from the serial port
+                    listenForData();
+
+                } else {
+                    addToLog('Web Serial API not supported in this browser. Try Chrome or Edge.', 'error');
+                }
+            } catch (error) {
+                addToLog(`Connection failed: ${error.message}`, 'error');
+            }
+        }
+
+        async function disconnect() {
+            if (reader) {
+                await reader.cancel();
+                reader.releaseLock();
+                reader = null;
+            }
+            if (writer) {
+                writer.releaseLock();
+                writer = null;
+            }
+            if (port) {
+                await port.close();
+                port = null;
+            }
+
+            connectButton.textContent = 'Connect to Device';
+            statusDiv.textContent = 'Status: Disconnected';
+            statusDiv.classList.remove('bg-green-700');
+            statusDiv.classList.add('bg-gray-700');
+            sosButton.disabled = true;
+            addToLog('Device disconnected.', 'system');
+        }
+
+        async function listenForData() {
+            try {
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done) {
+                        break;
+                    }
+                    const text = decoder.decode(value);
+                    addToLog(text, 'received');
+                }
+            } catch (error) {
+                if (error.name !== 'NetworkError') {
+                     addToLog(`Error reading from device: ${error.message}`, 'error');
+                }
+            } finally {
+                reader.releaseLock();
+            }
+        }
+        
+        function addToLog(message, type = 'raw') {
+            const entry = document.createElement('p');
+            entry.className = 'log-entry mb-1';
+            const timestamp = new Date().toLocaleTimeString();
+            let coloredMessage = message;
+
+            // Sanitize message to prevent HTML injection
+            message = message.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+            switch (type) {
+                case 'system':
+                    coloredMessage = `<span class="text-blue-400">[SYSTEM]</span> ${message}`;
+                    break;
+                case 'sent':
+                    coloredMessage = `<span class="text-yellow-400">[SENT]</span> ${message}`;
+                    break;
+                case 'received':
+                     coloredMessage = `<span class="text-green-400">[RECV]</span> ${message.split('\n').join('<br><span class="text-green-400">[RECV]</span> ')}`;
+                    break;
+                case 'error':
+                    coloredMessage = `<span class="text-red-500">[ERROR]</span> ${message}`;
+                    break;
+                default:
+                     coloredMessage = `<span class="text-gray-500">${message}</span>`;
+            }
+
+            entry.innerHTML = `<span class="text-gray-500">${timestamp}: </span>${coloredMessage}`;
+            logDiv.appendChild(entry);
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+    </script>
+</body>
+</html>
+
