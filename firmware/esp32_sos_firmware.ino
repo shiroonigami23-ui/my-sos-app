@@ -1,143 +1,200 @@
 /*
- * EmergencySOS - ESP32 Firmware
+ * =================================================================
+ * My Offline SOS Messenger - FULL FEATURE FIRMWARE (Phase 2)
+ * =================================================================
  *
- * This firmware creates a simple mesh network using ESP-NOW to send and receive
- * emergency SOS signals. It's designed to work offline, without any internet connection.
+ * This firmware includes:
+ * 1.  GPS Integration: Reads location data from a GPS module.
+ * 2.  Mesh Relay Logic: Re-broadcasts received messages to extend network range.
+ * 3.  JSON Data Format: Sends data as a structured JSON string for easy parsing.
  *
- * Hardware Required:
+ * HARDWARE REQUIRED:
  * - ESP32 Development Board
- * - A push button connected to GPIO 0 (or any other pin, just update the code)
+ * - Push Button on GPIO 0
+ * - GPS Module (e.g., NEO-6M, GY-NEO6MV2)
  *
- * How it works:
- * 1. The ESP32 initializes ESP-NOW, a fast, connectionless communication protocol.
- * 2. It listens for incoming messages from other devices in the mesh.
- * 3. When the physical button on the device is pressed, it broadcasts an SOS
- * message containing its unique MAC address to all other devices in range.
- * 4. Any device that receives a message prints it to the Serial Monitor.
- * 5. This firmware is the core of the system described in your production pack.
- * You can later integrate GPS, fall detection (MPU6050), and cellular (SIM800L)
- * modules by adding the relevant code in the indicated sections.
+ * WIRING FOR GPS MODULE:
+ * GPS VCC   ->   ESP32 3.3V
+ * GPS GND   ->   ESP32 GND
+ * GPS TX    ->   ESP32 GPIO 16 (RX2)
+ * GPS RX    ->   ESP32 GPIO 17 (TX2)
+ *
+ * 
+ *
+ * LIBRARIES NEEDED:
+ * - TinyGPS++: Install via Arduino IDE's Library Manager.
+ * - ArduinoJson: Install via Arduino IDE's Library Manager.
+ *
 */
 
 #include <esp_now.h>
 #include <WiFi.h>
+#include <TinyGPS++.h>
+#include <ArduinoJson.h>
 
-// Pin for the SOS button. GPIO 0 is convenient as it's often the "BOOT" button.
+// --- Pin Definitions ---
 const int SOS_BUTTON_PIN = 0;
+#define GPS_RX_PIN 16 // ESP32 RX2
+#define GPS_TX_PIN 17 // ESP32 TX2
 
-// Define a structure for the data to be sent over ESP-NOW
-typedef struct struct_message {
-  char device_id[18]; // To store the MAC address
-  char message[100];
-  int message_type; // 1 for SOS, 2 for acknowledgement, etc.
-} struct_message;
+// --- GPS Setup ---
+TinyGPSPlus gps;
+HardwareSerial gpsSerial(2); // Use hardware serial 2 for GPS
 
-// Create a message structure
-struct_message myData;
-
-// Broadcast address (sends to all devices in the network)
+// --- ESP-NOW Setup ---
 uint8_t broadcastAddress[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 
-// Variable to store peer info
-esp_now_peer_info_t peerInfo;
+// --- Mesh Relay Logic ---
+const int MAX_SEEN_MESSAGES = 10;
+unsigned long seenMessageIds[MAX_SEEN_MESSAGES];
+int nextMessageIdIndex = 0;
 
-// Callback function for when data is sent
+// Data structure for messages
+typedef struct struct_message {
+    unsigned long id;
+    char sender[18];
+    char message[100];
+    double latitude;
+    double longitude;
+} struct_message;
+
+struct_message myData;
+
+// Callback when data is sent
 void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
-  Serial.print("\r\nLast Packet Send Status:\t");
-  Serial.println(status == ESP_NOW_SEND_SUCCESS ? "Delivery Success" : "Delivery Fail");
+    Serial.print("Last Packet Send Status: ");
+    Serial.println(status == ESP_NOW_SEND_SUCCESS ? "Delivery Success" : "Delivery Fail");
 }
 
-// Callback function for when data is received
-void OnDataRecv(const uint8_t * mac, const uint8_t *incomingData, int len) {
-  memcpy(&myData, incomingData, sizeof(myData));
-  Serial.println("-----------------");
-  Serial.print("Message received from: ");
-  Serial.println(myData.device_id);
-  Serial.print("Message: ");
-  Serial.println(myData.message);
-  Serial.println("-----------------");
+// Check if we've already seen and relayed this message
+bool hasSeenMessage(unsigned long id) {
+    for (int i = 0; i < MAX_SEEN_MESSAGES; i++) {
+        if (seenMessageIds[i] == id) {
+            return true;
+        }
+    }
+    return false;
+}
 
-  // You could add logic here to re-broadcast the message
-  // to extend the range of the mesh network.
+// Add a message ID to our list of seen messages
+void addSeenMessage(unsigned long id) {
+    seenMessageIds[nextMessageIdIndex] = id;
+    nextMessageIdIndex = (nextMessageIdIndex + 1) % MAX_SEEN_MESSAGES;
+}
+
+// Callback when data is received
+void OnDataRecv(const uint8_t *mac, const uint8_t *incomingData, int len) {
+    memcpy(&myData, incomingData, sizeof(myData));
+    
+    // Check if this is a new message we haven't relayed yet
+    if (!hasSeenMessage(myData.id)) {
+        addSeenMessage(myData.id);
+
+        // Print to local serial for the connected Web App
+        JsonDocument doc;
+        doc["id"] = myData.id;
+        doc["sender"] = myData.sender;
+        doc["message"] = myData.message;
+        doc["lat"] = myData.latitude;
+        doc["lon"] = myData.longitude;
+        serializeJson(doc, Serial);
+        Serial.println();
+
+        // Relay the message to the rest of the mesh
+        Serial.printf("Relaying message %lu from %s...\n", myData.id, myData.sender);
+        esp_now_send(broadcastAddress, (uint8_t *) &myData, sizeof(myData));
+    } else {
+        Serial.printf("Ignoring duplicate message %lu.\n", myData.id);
+    }
 }
 
 void setup() {
-  // Initialize Serial Monitor
-  Serial.begin(115200);
+    Serial.begin(115200);
+    gpsSerial.begin(9600, SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN);
 
-  // Set device as a Wi-Fi Station
-  WiFi.mode(WIFI_STA);
+    pinMode(SOS_BUTTON_PIN, INPUT_PULLUP);
 
-  // Initialize ESP-NOW
-  if (esp_now_init() != ESP_OK) {
-    Serial.println("Error initializing ESP-NOW");
-    return;
-  }
+    WiFi.mode(WIFI_STA);
 
-  // Register the send callback
-  esp_now_register_send_cb(OnDataSent);
+    if (esp_now_init() != ESP_OK) {
+        Serial.println("Error initializing ESP-NOW");
+        return;
+    }
 
-  // Register the receive callback
-  esp_now_register_recv_cb(OnDataRecv);
+    esp_now_register_send_cb(OnDataSent);
+    esp_now_register_recv_cb(OnDataRecv);
 
-  // Register peer
-  memcpy(peerInfo.peer_addr, broadcastAddress, 6);
-  peerInfo.channel = 0;
-  peerInfo.encrypt = false;
+    esp_now_peer_info_t peerInfo = {};
+    memcpy(peerInfo.peer_addr, broadcastAddress, 6);
+    peerInfo.channel = 0;
+    peerInfo.encrypt = false;
+    if (esp_now_add_peer(&peerInfo) != ESP_OK) {
+        Serial.println("Failed to add peer");
+        return;
+    }
 
-  // Add peer
-  if (esp_now_add_peer(&peerInfo) != ESP_OK) {
-    Serial.println("Failed to add peer");
-    return;
-  }
-
-  // Configure the SOS button pin
-  pinMode(SOS_BUTTON_PIN, INPUT_PULLUP);
-
-  Serial.println("=====================================");
-  Serial.println("ESP32 SOS Device Initialized");
-  Serial.print("My MAC Address: ");
-  Serial.println(WiFi.macAddress());
-  Serial.println("Press the button on Pin 0 to send an SOS broadcast.");
-  Serial.println("=====================================");
+    Serial.println("=========================================");
+    Serial.println("SOS Device Initialized (Full-Feature)");
+    Serial.print("My MAC Address: ");
+    Serial.println(WiFi.macAddress());
+    Serial.println("GPS & Mesh Relay Enabled.");
+    Serial.println("=========================================");
 }
 
-void loop() {
-  // Check if the SOS button is pressed
-  // We use digitalRead and check for LOW because INPUT_PULLUP means the
-  // pin is HIGH by default and goes LOW when pressed.
-  if (digitalRead(SOS_BUTTON_PIN) == LOW) {
-    Serial.println("SOS Button Pressed! Sending broadcast...");
-    sendSOS();
-    // Wait for a moment to avoid sending multiple messages for a single press
-    delay(1000);
-  }
-
-  // You can listen for commands from the Web App here
-  if (Serial.available() > 0) {
-    String command = Serial.readStringUntil('\n');
-    command.trim();
-    if (command == "SOS") {
-        Serial.println("SOS command received from Web App! Sending broadcast...");
-        sendSOS();
+// Function to get the latest GPS data
+void updateGPS() {
+    while (gpsSerial.available() > 0) {
+        gps.encode(gpsSerial.read());
     }
-  }
 }
 
 void sendSOS() {
-    // 1. --- INTEGRATE GPS ---
-    // Here you would add code to read from a GPS module like a NEO-6M.
-    // For now, we'll use a placeholder message.
-    // Example: String gps_coords = getGPSCoordinates();
+    Serial.println("SOS triggered! Reading GPS...");
+    updateGPS(); // Get the very latest GPS fix
 
-    // Set the data to be sent
+    // Prepare data
+    myData.id = esp_random(); // Generate a unique ID for this message
     String macAddress = WiFi.macAddress();
-    macAddress.toCharArray(myData.device_id, macAddress.length() + 1);
+    macAddress.toCharArray(myData.sender, macAddress.length() + 1);
+    strcpy(myData.message, "HELP! Emergency Signal.");
 
-    // Construct the message
-    String sosMessage = "HELP! Emergency at my location. "; // + gps_coords;
-    sosMessage.toCharArray(myData.message, sosMessage.length() + 1);
-    myData.message_type = 1; // SOS Type
+    if (gps.location.isValid()) {
+        myData.latitude = gps.location.lat();
+        myData.longitude = gps.location.lng();
+        Serial.printf("Location: %f, %f\n", myData.latitude, myData.longitude);
+    } else {
+        myData.latitude = 0.0;
+        myData.longitude = 0.0;
+        Serial.println("Location: Not available.");
+    }
+
+    // Add this message to our own 'seen' list so we don't relay our own message
+    addSeenMessage(myData.id);
+
+    // Broadcast the message
+    esp_now_send(broadcastAddress, (uint8_t *) &myData, sizeof(myData));
+}
+
+
+void loop() {
+    // Check for button press
+    if (digitalRead(SOS_BUTTON_PIN) == LOW) {
+        sendSOS();
+        delay(2000); // Debounce and prevent spamming
+    }
+
+    // Check for command from Web App
+    if (Serial.available() > 0) {
+        String command = Serial.readStringUntil('\n');
+        command.trim();
+        if (command == "SOS") {
+            sendSOS();
+        }
+    }
+    
+    // Continuously update GPS data in the background
+    updateGPS();
+}    myData.message_type = 1; // SOS Type
 
     // 2. --- INTEGRATE CELLULAR (SIM800L) ---
     // This is where you would add code to send an SMS as a fallback.
