@@ -1,0 +1,20 @@
+Dependencies
+/node_modules
+/bower_components
+Build artifacts
+/build
+/dist
+/.pio
+/.vscode
+Arduino IDE temporary files
+*.tmp
+*.bak
+*.log
+*.ide
+Local configuration
+.env
+*.env.local
+.env..local
+Operating System files
+.DS_Store
+Thumbs.db
