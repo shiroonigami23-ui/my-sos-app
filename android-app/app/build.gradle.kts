@@ -7,6 +7,23 @@ android {
     namespace = "com.shiro.sosapp"
     compileSdk = 34
 
+    val releaseKeystoreFile = file("keystore/release.keystore")
+    val hasSigning = releaseKeystoreFile.exists()
+        && System.getenv("SIGNING_STORE_PASSWORD") != null
+        && System.getenv("SIGNING_KEY_ALIAS") != null
+        && System.getenv("SIGNING_KEY_PASSWORD") != null
+
+    signingConfigs {
+        if (hasSigning) {
+            create("release") {
+                storeFile = releaseKeystoreFile
+                storePassword = System.getenv("SIGNING_STORE_PASSWORD")
+                keyAlias = System.getenv("SIGNING_KEY_ALIAS")
+                keyPassword = System.getenv("SIGNING_KEY_PASSWORD")
+            }
+        }
+    }
+
     defaultConfig {
         applicationId = "com.shiro.sosapp"
         minSdk = 24
@@ -24,6 +41,9 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = false
+            if (hasSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
