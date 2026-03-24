@@ -7,6 +7,8 @@ add_library(
     jni_bridge.c
     sos_engine.c
     geo_math.c
+    sos_crypto.c
+    sos_queue.c
 )
 
 find_library(log-lib log)

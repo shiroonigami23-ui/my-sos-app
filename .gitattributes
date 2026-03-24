@@ -1,0 +1,5 @@
+# Keep legacy browser controller out of language-share metrics.
+pwa/* linguist-vendored
+
+# Treat Arduino firmware as C for project language focus.
+firmware/*.ino linguist-language=C
