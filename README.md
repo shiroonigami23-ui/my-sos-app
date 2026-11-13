@@ -2,8 +2,6 @@
 
 <img src="assets/esp32-devkitc.jpg" alt="My SOS — Offline Emergency Mesh" width="80%">
 
-<sub>The ESP32 board the firmware runs on. Image: <a href='https://github.com/espressif/esp-idf'>Espressif ESP-IDF docs</a> (Apache-2.0)</sub>
-
 # 🆘 My SOS — Offline Emergency Mesh
 
 ### Offline-first SOS toolkit — ESP32 ESP-NOW mesh firmware, Web Serial PWA and an Android app with a C engine
