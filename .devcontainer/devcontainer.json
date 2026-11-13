@@ -1,0 +1,5 @@
+{
+  "name": "My SOS \u2014 Offline Emergency Mesh",
+  "image": "mcr.microsoft.com/devcontainers/java:1-17",
+  "postCreateCommand": "echo Arduino + Android toolchains needed for full build"
+}
