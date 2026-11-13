@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/esp32-devkitc.jpg" alt="My SOS — Offline Emergency Mesh" width="80%">
+<img src="assets/wristband-hero.png" alt="My SOS — Offline Emergency Mesh" width="100%">
 
 # 🆘 My SOS — Offline Emergency Mesh
 
@@ -43,6 +43,27 @@ geo-distance, queueing and crypto — then hands off to SMS when a network is av
 | **C SOS engine** | `sos_engine.c`, `geo_math.c`, `sos_queue.c`, `sos_crypto.c` via `jni_bridge.c` |
 | **SMS hand-off** | Opens the SMS app with a prefilled emergency payload |
 | **Release pipeline** | `.github/workflows/android-release.yml` builds and uploads the APK on tag |
+
+## ⌚ Wearable Edition — SOS Wristband (concept)
+
+The next step for this project is to shrink a node into a **wrist strap**: an ESP32, GPS module, LiPo battery and vibration motor sealed in a slim titanium-style pod, with a **capacitive distress pad on the underside** that touches the wrist. A long press — or a press on the red SOS ring on top — broadcasts a GPS-tagged alert over the ESP-NOW mesh, even with no mobile network.
+
+<table><tr>
+<td width="33%" align="center"><img src="assets/wristband-exploded.png" width="100%"><br><sub><b>Inside the band</b> — shell, ESP32, GPS, battery, haptics, flex PCB, touch pad</sub></td>
+<td width="33%" align="center"><img src="assets/wristband-worn.png" width="100%"><br><sub><b>On the trail</b> — one press sends an SOS pulse to nearby nodes</sub></td>
+<td width="33%" align="center"><img src="assets/wristband-touch.png" width="100%"><br><sub><b>Underside distress pad</b> — touch-to-alert against the wrist</sub></td>
+</tr></table>
+
+> These are concept renders for the planned hardware; the firmware in `firmware/` is what will run inside it.
+
+**Wearable build plan**
+
+- [ ] Pick a compact board (ESP32-C3 / ESP32-S3 mini) and a small GPS module (e.g. ATGM336H)
+- [ ] 200–300 mAh LiPo with TP4056-class charging and deep-sleep firmware for multi-day battery life
+- [ ] Capacitive touch pad on the inner strap (ESP32 touch GPIO) + long-press logic to avoid false alarms
+- [ ] Vibration motor feedback: "sent", "relayed", "help acknowledged"
+- [ ] 3D-printed / resin enclosure, then a silicone strap
+- [ ] Field test range and battery in the hills
 
 ## 🛠 Tech Stack
 
@@ -126,6 +147,13 @@ cd android-app && ./gradlew assembleDebug
 - [x] ESP-NOW mesh with GPS JSON alerts and relay
 - [x] PWA control panel
 - [x] Android app with native C engine + release workflow
+
+**Phase 2.5 — Wearable wristband**
+
+- [ ] Miniature ESP32 + GPS + LiPo stack
+- [ ] Underside capacitive distress pad with long-press
+- [ ] Haptic confirmations
+- [ ] Printed enclosure and silicone strap
 
 **Phase 3 — Range & reliability**
 

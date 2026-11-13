@@ -14,6 +14,15 @@ Status: **phase 2**.
 - [x] PWA control panel
 - [x] Android app with native C engine + release workflow
 
+### Phase 2.5 — Wearable wristband
+
+*Goal:* Turn a node into a wrist-worn SOS device.
+
+- [ ] Miniature ESP32 + GPS + LiPo stack
+- [ ] Underside capacitive distress pad with long-press
+- [ ] Haptic confirmations
+- [ ] Printed enclosure and silicone strap
+
 ### Phase 3 — Range & reliability
 
 *Goal:* Reach farther and never lose a message.
@@ -38,4 +47,4 @@ Pick any unchecked item, open an issue to discuss the approach, then send a PR. 
 
 
 ---
-*Last updated: 2026-11-13*
+*Last updated: 2026-11-14*
