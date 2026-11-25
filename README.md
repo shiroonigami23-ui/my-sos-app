@@ -49,7 +49,7 @@ geo-distance, queueing and crypto — then hands off to SMS when a network is av
 The next step for this project is to shrink a node into a **wrist strap**: an ESP32, GPS module, LiPo battery and vibration motor sealed in a slim titanium-style pod, with a **capacitive distress pad on the underside** that touches the wrist. A long press — or a press on the red SOS ring on top — broadcasts a GPS-tagged alert over the ESP-NOW mesh, even with no mobile network.
 
 <table><tr>
-<td width="33%" align="center"><img src="assets/wristband-exploded.png" width="100%"><br><sub><b>Inside the band</b> — shell, ESP32, GPS, battery, haptics, flex PCB, touch pad</sub></td>
+<td width="33%" align="center"><img src="assets/wristband-explode.png" width="100%"><br><sub><b>Inside the band</b> — shell, ESP32, GPS, battery, haptics, flex PCB, touch pad</sub></td>
 <td width="33%" align="center"><img src="assets/wristband-worn.png" width="100%"><br><sub><b>On the trail</b> — one press sends an SOS pulse to nearby nodes</sub></td>
 <td width="33%" align="center"><img src="assets/wristband-touch.png" width="100%"><br><sub><b>Underside distress pad</b> — touch-to-alert against the wrist</sub></td>
 </tr></table>
